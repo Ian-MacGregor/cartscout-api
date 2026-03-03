@@ -1,7 +1,7 @@
 {
   "name": "cartscout-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "CartScout API server",
   "main": "index.js",
   "type": "module",
   "engines": {
