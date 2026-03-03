@@ -12,9 +12,9 @@ import "dotenv/config";
       cors({
         origin: [
           "http://localhost:5173",
-          "https://Ian-MacGregor.github.io",
+          "https://ian-macgregor.github.io",
         ],
-        allowMethods: ["GET", "POST", "PUT", "DELETE"],
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allowHeaders: ["Content-Type", "Authorization"],
       })
     );
