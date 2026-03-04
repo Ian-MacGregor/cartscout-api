@@ -270,3 +270,50 @@ import "dotenv/config";
     serve({ fetch: app.fetch, port }, () => {
       console.log(`CartScout API running on port ${port}`);
     });
+
+// ─── Store Routes ───
+
+// Get stores near a location
+app.get("/api/stores", async (c) => {
+  const lat = parseFloat(c.req.query("lat"));
+  const lng = parseFloat(c.req.query("lng"));
+  const radius = parseFloat(c.req.query("radius") || "20");
+
+  if (isNaN(lat) || isNaN(lng)) {
+    return c.json({ error: "lat and lng are required" }, 400);
+  }
+
+  // Approximate bounding box (1 degree lat ≈ 69 miles)
+  const latDelta = radius / 69;
+  const lngDelta = radius / (69 * Math.cos(lat * Math.PI / 180));
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SECRET_KEY
+  );
+
+  const { data, error } = await supabase
+    .from("stores")
+    .select("*")
+    .gte("lat", lat - latDelta)
+    .lte("lat", lat + latDelta)
+    .gte("lng", lng - lngDelta)
+    .lte("lng", lng + lngDelta);
+
+  if (error) return c.json({ error: error.message }, 500);
+
+  // Calculate actual distances and sort
+  const withDistance = data.map(store => ({
+    ...store,
+    distance: Math.round(
+      Math.sqrt(
+        Math.pow((store.lat - lat) * 69, 2) +
+        Math.pow((store.lng - lng) * 69 * Math.cos(lat * Math.PI / 180), 2)
+      ) * 10
+    ) / 10,
+  }))
+    .filter(s => s.distance <= radius)
+    .sort((a, b) => a.distance - b.distance);
+
+  return c.json(withDistance);
+});
