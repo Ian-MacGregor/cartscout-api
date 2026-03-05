@@ -317,3 +317,35 @@ app.get("/api/stores", async (c) => {
 
   return c.json(withDistance);
 });
+
+// ─── User Location ───
+
+app.post("/api/location", async (c) => {
+  const supabase = getSupabase(c.req.header("Authorization"));
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const { lat, lng } = await c.req.json();
+
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return c.json({ error: "lat and lng are required numbers" }, 400);
+  }
+
+  const serviceClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SECRET_KEY
+  );
+
+  const { error } = await serviceClient
+    .from("user_locations")
+    .upsert({
+      user_id: user.id,
+      lat,
+      lng,
+      updated_at: new Date().toISOString(),
+    });
+
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ success: true });
+});
