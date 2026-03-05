@@ -1,0 +1,19 @@
+name: Daily Store Scraper
+on:
+  schedule:
+    - cron: "0 6 * * *"  # Runs at 6 AM UTC every day
+  workflow_dispatch:       # Allows manual trigger
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node store_scraper.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
