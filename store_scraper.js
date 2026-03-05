@@ -90,16 +90,25 @@ function buildBoundingBox(lat, lng, radiusMiles) {
 }
 
 async function fetchStoresInArea(south, west, north, east) {
+  
   const query = `
-    [out:json][timeout:60];
+    [out:json][timeout:120];
     (
-      node["shop"="supermarket"](${south},${west},${north},${east});
-      way["shop"="supermarket"](${south},${west},${north},${east});
-      node["shop"="grocery"](${south},${west},${north},${east});
-      way["shop"="grocery"](${south},${west},${north},${east});
+      nwr["shop"="supermarket"](${south},${west},${north},${east});
     );
     out center tags;
-  `;
+`;
+// --- This is too costly and times out:
+//  const query = `
+//    [out:json][timeout:60];
+//    (
+//      node["shop"="supermarket"](${south},${west},${north},${east});
+//      way["shop"="supermarket"](${south},${west},${north},${east});
+//      node["shop"="grocery"](${south},${west},${north},${east});
+//      way["shop"="grocery"](${south},${west},${north},${east});
+//    );
+//    out center tags;
+//  `;
 
   const response = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
