@@ -349,3 +349,129 @@ app.post("/api/location", async (c) => {
   if (error) return c.json({ error: error.message }, 500);
   return c.json({ success: true });
 });
+
+// Get prices for a list of product names at nearby stores
+app.post("/api/compare", async (c) => {
+  const { lat, lng, radius, items } = await c.req.json();
+
+  if (!lat || !lng || !items || !items.length) {
+    return c.json({ error: "lat, lng, and items are required" }, 400);
+  }
+
+  const serviceClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SECRET_KEY
+  );
+
+  // Get nearby stores
+  const latDelta = (radius || 20) / 69;
+  const lngDelta = (radius || 20) / (69 * Math.cos(lat * Math.PI / 180));
+
+  const { data: stores } = await serviceClient
+    .from("stores")
+    .select("*")
+    .gte("lat", lat - latDelta)
+    .lte("lat", lat + latDelta)
+    .gte("lng", lng - lngDelta)
+    .lte("lng", lng + lngDelta);
+
+  if (!stores || stores.length === 0) {
+    return c.json({ error: "No stores found nearby" }, 404);
+  }
+
+  // Get product IDs for the requested item names
+  const productNames = items.map((i) => i.name);
+  const { data: products } = await serviceClient
+    .from("products")
+    .select("id, name, base_price")
+    .in("name", productNames);
+
+  const productIdMap = {};
+  (products || []).forEach((p) => {
+    productIdMap[p.name] = { id: p.id, base_price: p.base_price };
+  });
+
+  // Get real prices for these products at these stores
+  const storeIds = stores.map((s) => s.id);
+  const productIds = Object.values(productIdMap).map((p) => p.id).filter(Boolean);
+
+  let priceMap = {}; // { storeId: { productName: { price, promo_price } } }
+
+  if (productIds.length > 0) {
+    const { data: prices } = await serviceClient
+      .from("prices")
+      .select("store_id, product_id, price, promo_price")
+      .in("store_id", storeIds)
+      .in("product_id", productIds);
+
+    // Build reverse lookup: product_id -> name
+    const idToName = {};
+    Object.entries(productIdMap).forEach(([name, p]) => {
+      if (p.id) idToName[p.id] = name;
+    });
+
+    (prices || []).forEach((p) => {
+      if (!priceMap[p.store_id]) priceMap[p.store_id] = {};
+      const name = idToName[p.product_id];
+      if (name) {
+        priceMap[p.store_id][name] = {
+          price: parseFloat(p.price),
+          promo_price: p.promo_price ? parseFloat(p.promo_price) : null,
+        };
+      }
+    });
+  }
+
+  // Build results for each store
+  const results = stores.map((store) => {
+    const distance = Math.round(
+      Math.sqrt(
+        Math.pow((store.lat - lat) * 69, 2) +
+        Math.pow((store.lng - lng) * 69 * Math.cos(lat * Math.PI / 180), 2)
+      ) * 10
+    ) / 10;
+
+    const storePrices = priceMap[store.id] || {};
+    let hasLiveData = Object.keys(storePrices).length > 0;
+    let liveItemCount = 0;
+
+    const itemPrices = items.map((item) => {
+      const livePrice = storePrices[item.name];
+      const isLive = !!livePrice;
+      if (isLive) liveItemCount++;
+
+      const unitPrice = livePrice
+        ? (livePrice.promo_price || livePrice.price)
+        : item.basePrice;
+
+      return {
+        name: item.name,
+        qty: item.qty,
+        unitPrice,
+        subtotal: unitPrice * item.qty,
+        isLive,
+        promoPrice: livePrice?.promo_price || null,
+        regularPrice: livePrice?.price || null,
+      };
+    });
+
+    return {
+      id: store.id,
+      name: store.store_name,
+      chain_name: store.chain_name,
+      address: store.address,
+      tier: store.tier,
+      distance,
+      total: itemPrices.reduce((sum, i) => sum + i.subtotal, 0),
+      itemPrices,
+      hasLiveData,
+      liveItemCount,
+      totalItemCount: items.length,
+    };
+  })
+    .filter((s) => s.distance <= (radius || 20))
+    .sort((a, b) => a.total - b.total)
+    .slice(0, 5);
+
+  return c.json(results);
+});
