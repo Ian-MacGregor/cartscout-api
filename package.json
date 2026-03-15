@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "scrape": "node store_scraper.js"
+    "scrape": "node store_scraper.js",
+    "scrape:prices": "node price_scraper.js"
   },
   "keywords": [],
   "author": "",
