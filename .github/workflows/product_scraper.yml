@@ -1,0 +1,19 @@
+name: product_scraper
+on:
+  schedule:
+    - cron: "0 5 * * *"  # Runs before store and price scrapers
+  workflow_dispatch:
+
+jobs:
+  product_scraper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node product_scraper.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
