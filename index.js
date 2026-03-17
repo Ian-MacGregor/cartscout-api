@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createClient } from "@supabase/supabase-js";
+import { scrapeArea } from "./scrape_area.js";
 
 const app = new Hono();
 
@@ -343,15 +344,10 @@ app.get("/api/stores", async (c) => {
 
 app.post("/api/location", async (c) => {
   const supabase = getSupabase(c.req.header("Authorization"));
-
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const { lat, lng } = await c.req.json();
-
-  if (typeof lat !== "number" || typeof lng !== "number") {
-    return c.json({ error: "lat and lng are required numbers" }, 400);
-  }
+  const { lat, lng, radius } = await c.req.json();
 
   const serviceClient = createClient(
     process.env.SUPABASE_URL,
@@ -362,8 +358,8 @@ app.post("/api/location", async (c) => {
     .from("user_locations")
     .upsert({
       user_id: user.id,
-      lat,
-      lng,
+      lat, lng,
+      radius_miles: radius || 20,
       updated_at: new Date().toISOString(),
     });
 
@@ -525,4 +521,23 @@ app.get("/api/products/search", async (c) => {
       productId: p.id,
     }))
   );
+});
+
+// ─── On-demand store scrape ───
+app.post("/api/stores/refresh", async (c) => {
+  const { lat, lng, radius } = await c.req.json();
+
+  if (!lat || !lng) return c.json({ error: "lat and lng required" }, 400);
+
+  try {
+    const result = await scrapeArea(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SECRET_KEY,
+      lat, lng, radius || 20
+    );
+    return c.json(result);
+  } catch (err) {
+    console.error("[on-demand] Scrape error:", err.message);
+    return c.json({ error: "Failed to scrape stores" }, 500);
+  }
 });
