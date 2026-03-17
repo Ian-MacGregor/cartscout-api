@@ -1,0 +1,1 @@
+alter table public.user_locations add column radius_miles integer default 20;
